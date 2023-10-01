@@ -2,9 +2,12 @@
  * 32-bit RISC-V Virtual Machine
  */
 
+#include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
+
+int debug = true;
 
 /*** RAM ***/
 // {{{
@@ -176,6 +179,83 @@ uint32_t mem_read(uint32_t PC) {
     return 0;
 }
 
+void branch_instr(uint8_t branch_type, uint32_t rs1_val, uint32_t rs2_val, uint32_t branch_target, uint32_t *PC) {
+
+    bool take_branch = false;
+
+    // Debug info, name of branch type
+    char *branch_name;
+
+    switch (branch_type) {
+        case OP_BEQ:
+            if (rs1_val == rs2_val) {
+                take_branch = true;
+            }
+            if (debug) {
+                branch_name = "BEQ";
+            }
+            break;
+        case OP_BNE:
+            if (rs1_val != rs2_val) {
+                take_branch = true;
+            }
+            if (debug) {
+                branch_name = "BNE";
+            }
+            break;
+        case OP_BLT:
+            if (((int32_t) rs1_val) < ((int32_t) rs2_val)) {
+                take_branch = true;
+            }
+            if (debug) {
+                branch_name = "BLT";
+            }
+            break;
+        case OP_BGE:
+            if (((int32_t) rs1_val) >= ((int32_t) rs2_val)) {
+                take_branch = true;
+            }
+            if (debug) {
+                branch_name = "BGE";
+            }
+            break;
+        case OP_BLTU:
+            if (rs1_val < rs2_val) {
+                take_branch = true;
+            }
+            if (debug) {
+                branch_name = "BLTU";
+            }
+            break;
+        case OP_BGEU:
+            if (rs1_val >= rs2_val) {
+                take_branch = true;
+            }
+            if (debug) {
+                branch_name = "BGEU";
+            }
+            break;
+        default:
+            printf("Unknown branch opcode (%d)! Exiting...\n", branch_type);
+            exit(1);
+            break;
+    }
+
+    // Check if we should take the branch & make sure PC pointer is non-null
+    if (take_branch && PC) {
+        *PC = branch_target;
+    }
+
+    if (debug) {
+        if (take_branch) {
+            printf("%s [true] branching to: %d\n", branch_name, branch_target);
+        }
+        else {
+            printf("%s [false]\n", branch_name);
+        }
+    }
+}
+
 /*** Program Driver ***/
 
 #define INITIAL_PC 0
@@ -200,7 +280,6 @@ int main(int argc, char **argv) {
 
     // Main loop
     int running = 1;
-    int debug = 1;
     while (running) {
         uint32_t instr = mem_read(PC);
         PC += 4;
@@ -226,72 +305,17 @@ int main(int argc, char **argv) {
                 // TODO
                 break;
             case OP_BRANCH:
+                // Extract information from instruction
                 // Get source registers
                 int rs1 = (instr & 0xF8000) >> 15;
                 int rs2 = (instr & 0x1F00000) >> 20;
+                // Get address to branch to
                 // TODO
                 uint32_t branch_target = 0;
                 // Determine which type of branch instruction this is
                 uint8_t branch_type = (instr & 0x7000) >> 12;
-                switch (branch_type) {
-                    case OP_BEQ:
-                        if (reg[rs1] == reg[rs2]) {
-                            PC = branch_target;
-                            if (debug) printf("beq [true] branching to: %d\n", branch_target);
-                        }
-                        else if (debug) {
-                            printf("beq [false]\n");
-                        }
-                        break;
-                    case OP_BNE:
-                        if (reg[rs1] != reg[rs2]) {
-                            PC = branch_target;
-                            if (debug) printf("bne [true] branching to: %d\n", branch_target);
-                        }
-                        else if (debug) {
-                            printf("bne [false]\n");
-                        }
-                        break;
-                    case OP_BLT:
-                        if (((int32_t) reg[rs1]) < ((int32_t) reg[rs2])) {
-                            PC = branch_target;
-                            if (debug) printf("blt [true] branching to: %d\n", branch_target);
-                        }
-                        else if (debug) {
-                            printf("blt [false]\n");
-                        }
-                    case OP_BGE:
-                        if (((int32_t) reg[rs1]) >= ((int32_t)reg[rs2])) {
-                            PC = branch_target;
-                            if (debug) printf("bge [true] branching to: %d\n", branch_target);
-                        }
-                        else if (debug) {
-                            printf("bge [false]\n");
-                        }
-                        break;
-                    case OP_BLTU:
-                        if (reg[rs1] < reg[rs2]) {
-                            PC = branch_target;
-                            if (debug) printf("bltu [true] branching to: %d\n", branch_target);
-                        }
-                        else if (debug) {
-                            printf("bltu [false]\n");
-                        }
-                        break;
-                    case OP_BGEU:
-                        if (reg[rs1] >= reg[rs2]) {
-                            PC = branch_target;
-                            if (debug) printf("bgeu [true] branching to: %d\n", branch_target);
-                        }
-                        else if (debug) {
-                            printf("bgeu [false]\n");
-                        }
-                        break;
-                    default:
-                        printf("Unknown branch opcode (%d)! Exiting...\n", branch_type);
-                        exit(1);
-                        break;
-                }
+
+                branch_instr(branch_type, reg[rs1], reg[rs2], branch_target, &PC);
                 break;
             case OP_LOAD:
                 // TODO
